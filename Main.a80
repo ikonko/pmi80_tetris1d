@@ -1,0 +1,781 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Tetris 1D "game" for pure PMI-80 ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
+;; Source 1: Source code and data
+
+dstadd  =       #1CA0   ;; Address in RAM for depack of part 2
+
+;; Memory use:
+;;
+;;  #0400-packed ... Code part 1 (not packed)
+;;  packed-????? ... LZX decompressor and packed code&data (????? < #0800)
+;;
+;;  #1C00-dstadd ... variables, buffers, stack
+;;  dstadd-#1FFF ... Code part 2 (depacked from packed-?????)
+
+	DEFINE codefile Main.cod
+	DEFINE datafile Main.dat
+
+	OUTPUT codefile
+	org 0400h + 6	 ;; 6 bytes space for "ld sp,dstadd : call depack"
+   	;org	0400h
+ 
+PPA	equ 0F8h    ; Segmenty
+PPC	equ 0FAh    ; Adresa segmentu
+
+stdcnt  equ 255
+shortcnt  equ 90
+intrdly	equ	80
+
+init:	ld	hl,endvar
+	xor	a
+clrvar:
+	ld	(hl),a
+	dec	l
+	jp	nz,clrvar	
+
+	ld	hl,pts			; Copy Pts string
+	ld	(hl),13h
+	inc	hl
+	ld	(hl),10h
+	inc	hl
+	ld	(hl),19h
+
+	ld	a,intrdly		;; Intro delay
+	ld	(cnt),a
+	ld	hl,data2+9
+	ld	(chr),hl
+
+    	call    clrscr
+    
+; Shows the pattern on the screen	 
+pat:
+	ld  hl,cnt
+    	ld  e,(hl)
+start2:
+	ld	hl,data2
+	ld	c,9
+seg1:
+    	ld  a,07Fh
+    	out (PPA),a
+
+        ld      a,c
+        cpl
+        out     (PPC),a
+
+        ld      a,(hl)
+        cpl
+        out     (PPA),a
+
+	inc	hl
+
+	dec	c
+	ld  a,c
+	cp  254
+	jp  nz,seg1
+
+	dec	e
+	jp	nz,start2
+
+	ld	a,07Fh
+	out	(PPA),a
+
+	push	bc
+	push	de
+	push	hl
+	call	exec	    ; Do calculations of what's on the display
+	pop	hl
+	pop	de
+	pop	bc
+	
+	jp	pat
+
+; Main routine preparing data for display	 
+
+exec:
+phsel:	ld 	a,(phase)	    ; Phase selection
+	ld	hl,tskok1
+
+;; Universal branch routine
+;; Vstup: A=branch number, HL=table with addresses
+
+tabjmp	add	a,a
+	add	a,l
+	ld	l,a
+	jp	nc,tabskp	;<= Ak tabulky cele lezia v ramci 256 bajtov,
+	inc	h		;<= tieto dve instrukcie tu netreba
+tabskp	ld	a,(hl)
+	inc	hl
+	ld	h,(hl)
+	ld	l,a
+	jp	(hl)
+
+;; Value phase:  0  1  2  3  4  5  6  7  8  9   10
+tskok1	dw	p0,p1,p2,p1,p3,p1,p4,p1,p5,p6,p7,p9,p10
+
+p0:	ld  hl,anidat	    ; SinDiKat animation
+	jp  anim
+	
+p3:	ld  hl,anidat2	    ; Tetris animation
+	
+anim:	ld	de,pos
+	ld	a,(de)
+	inc	a
+	ld	(de),a
+	
+	add a,l
+	jp  nc,hisok
+	inc h
+hisok:	      
+	ld  l,a
+	ld  a,(hl)  ; Data in acc
+	
+	cp  255
+	jp  z,noupd  ; Don't change anything, phase is over
+	
+	cp  128
+	jp  z,nchr  ; Next char
+	
+	ld  c,a	    ; Temporary store in C
+	
+	ld  hl,(chr)
+
+	ld	(hl),c  ; Data to display position
+	ret
+	
+nchr:	ld	hl,pos
+	inc	(hl)
+
+	ld	l,low chr
+	dec	(hl)
+	ret	nz
+	inc	(hl)
+	
+	ret
+noupd:
+common:	ld	a,9	    ; (1C)09 is the new address for animation
+	ld	(chr),a
+
+incphs:	ld	hl,phase
+	inc	(hl)
+	dec	hl
+	ld	(hl),0	;; pos = 0
+
+	ret
+
+; Fadeout animation	   
+
+p1:	ld  hl,data2
+	ld  de,fadeout
+	
+	ld  a,(pos)
+	add a,e
+	jp  nc,disok
+	inc d
+
+disok:	ld  e,a
+	ld  a,(de)
+
+	inc	a
+	jp	z,common
+
+	ld  b,10
+
+p1_1:	ld  a,(de)
+	and (hl)
+	ld  (hl),a
+	inc hl
+	
+	dec b	  
+	jp  nz,p1_1   
+	
+	ld	hl,pos
+	inc	(hl)
+	
+	ret
+
+p2:			; Presents scroll
+	ld  hl,clsdat
+	ld  a,(pos)
+	cp  10
+	jp  nc,p2_end
+	
+	add  a,l
+	ld  l,a
+
+	call	prtstr
+	ld	a,(pos)
+	cp	10
+	jp	z,p2_end
+
+	inc	a
+	ld	(pos),a
+	ret
+
+p2_end: inc	a
+	ld	(pos),a
+	cp	20
+	jp	z,common	;; Tu bolo jp  z,p2_quit
+	ret
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; End of unpacked code part
+
+        OUTPUT  datafile
+        ORG     dstadd
+
+;; Begin of code and data
+;; what will be packed
+;; and after execute,
+;; it will be depacked to RAM
+
+packed  =       $
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+p4:			    ; Show `dEMO FOr`
+	ld	a,(pos)
+	cp	10
+	jp	z,incphs	;; Tu bolo	jp  z,p4_end
+
+	ld	hl,demo
+	call	prtstr
+	
+	ld	hl,pos
+	inc	(hl)
+	ret
+p5:			    ; Show "PMI-80" & flash
+	ld	a,(pos)
+	rra
+	rra
+	rra
+	rra
+
+	ld	hl,clsdat	     
+
+	jp  	c,p5_prt
+	
+	ld	hl,01E7h
+
+p5_prt:	call	prtstr
+
+	ld	hl,pos
+	inc	(hl)
+	ld	a,48
+	sub	(hl)
+
+	ret	nz
+	ld	a,9
+	ld	(hl),a	; Load 0 to (pos)
+
+	inc	l
+	inc	(hl)	; Increase phase
+
+	ret	  
+tstbr:
+	ld	a,11
+	jp	tstkey
+tsteq:
+        ld      a,7
+tstkey:
+        out     (PPC),a
+        in      a,(PPC)
+        ld      e,a
+	ld	a,0
+	out	(PPC),a
+	ld	a,e
+        and     16
+	ret
+	
+p6:	; Tetris 1d itself
+; Test kbd
+        ld      hl,cnt
+	ld	(hl),stdcnt
+	call	tstbr
+	jp	z,p6_exit
+	call	tsteq
+        jp     nz,cont
+
+	ld     (hl),40
+cont:
+    call    clrscr
+    ld	a,(pse)
+    cp 	1
+    jp  nz,animt
+
+    ld  a,shortcnt
+    ld  (cnt),a
+; Phase of clear screen + new tile
+    ld  hl,data2+9
+    ld  a,(predict)
+    ld  b,a
+predx:
+    ld a,(hl)
+    or 1
+    ld (hl),a
+
+    dec hl
+    dec b
+    jp  nz,predx
+
+    ld  e,92
+    ld  a,(blik)
+    inc a
+    ld  (blik),a
+
+    and 1
+    jp  z,noblnk
+    ld  e,0
+noblnk:    
+    ld  hl,data2+1
+    ld  a,(cur)
+    ld  b,a
+flsh:
+    ld  (hl),e
+    inc hl
+    dec b
+    jp  nz,flsh
+    ld  a,(blik)
+    cp 6
+    ret nz
+    
+    xor a
+    ld (blik),a  
+    ld  hl,pse
+    dec (hl)
+    ld	a,9
+    ld  (pos),a
+    ld  hl,ptrnd
+    inc (hl)
+    ld  a,stdcnt
+    ld  (cnt),a
+    ld	a,(score3)
+    ld  (backup),a
+    ld  a,(cur)
+    ld  hl,score3
+    add a,(hl)
+    jp  nc,noinch
+    ld  hl,(score)
+    inc hl
+    ld  (score),hl
+noinch:
+    ld (score3),a
+    ld b,a
+    ld a,(backup)
+    xor b
+    and 0F0h
+    ret z
+    xor	a
+    ld  (scdly),a
+    ld hl,phase
+    inc (hl)    
+    ret 
+
+animt: 
+    ld  hl,data2
+    ld  a,(pos)
+    ld  b,0
+    ld  c,a
+    add hl,bc
+    push hl
+    ld  hl,rnd
+    ld  a,(ptrnd)
+    ld  e,a
+    ld  d,0
+    add hl,de
+    ld  a,(hl)
+    and 3
+    jp  nz,nieco 
+    inc a
+nieco:
+    inc a
+    ld b,a
+    ld (cur),a
+    inc hl
+    ld a,(hl)
+    and 3
+    jp  nz,nieco2
+    inc a
+nieco2:
+    inc a
+    ld (predict),a
+    pop hl
+cube:
+    
+    ld  (hl),92
+    inc hl
+    dec b
+    jp  nz,cube
+
+    ld  hl,data2+9
+    ld  a,(predict)
+    ld  b,a
+pred:
+    ld a,(hl)
+    or 1
+    ld (hl),a
+
+    dec hl
+    dec b
+    jp  nz,pred
+
+    ld  a,(pos)
+    dec a
+    jp  z,nodec
+    ld  (pos),a
+    ret
+nodec:
+    ld  a,(pse)
+    inc a
+    ld  (pse),a
+    ret
+
+p6_exit:
+	ld	hl,phase
+	inc	(hl)
+	inc	(hl)		; Go directly to high score
+	xor	a
+	ld	(pos),a
+	ret
+  
+p7:	
+	ld	a,(scdly)
+	cp	3
+	jp	z,nomore
+
+	ld	hl,(score)
+	ld	d,h
+	ld	e,l
+	ld	hl,pts+8
+
+	ld	a,(score3)
+	call	scrbyte
+
+	ld	a,e
+	call	scrbyte
+	
+	ld	a,d
+	call	scrbyte
+	
+	ld	hl,pts	
+	call	prtstr
+	ld	hl,scdly
+	inc	(hl)
+	ret
+;Show score byte in A
+scrbyte:
+	ld	b,a
+	and     0Fh
+        ld      (hl),a
+        dec     hl
+        ld      a,b
+        rra
+        rra
+        rra
+        rra
+        and     0Fh
+        ld      (hl),a
+	dec	hl
+	ret
+nomore:
+	ld	hl,phase
+	dec	(hl)
+	xor	a
+	ld	(scdly),a
+clrscr:	
+	ld  b,10
+	ld  hl,data2
+	xor a
+clbuf:
+	ld  (hl),a
+	inc hl
+	dec b
+	jp  nz,clbuf
+    	ret
+
+;Show the high score table
+p9:
+	call	tsteq
+	jp	z,p8_exit
+	ld	a,(pos)
+	or	a
+	jp	nz,p8_cont
+
+p9_init:
+	ld	hl,clsdat
+	ld	de,highbuff
+	ld	c,9
+	call	ldir80
+	
+	ld	hl,highsc
+	ld	c,12		; High score lenght
+	call	ldir80
+	
+	ld	hl,chuck
+	ld	c,21		; Chuck lenght
+	call	ldir80
+	ld	a,19h
+	ld	(de),a
+	inc	de
+	ld	a,2
+	ld	(de),a
+	inc	de
+	ld	hl,chuck+1
+	ld	c,17
+	call	ldir80
+
+	ld	a,19h
+	ld	(de),a
+	inc	de
+	ld	a,3
+	ld	(de),a
+	inc	de
+
+	ld	hl,plr1
+	ld	c,9		; Player 1 lenght
+	call	ldir80
+
+	ld	hl,(score)
+	ld	a,h
+	and	0F0h
+	rra
+	rra
+	rra
+	rra
+	ld	(de),a
+	inc	de
+	ld	a,h
+	and	0Fh
+	ld	(de),a
+	inc	de
+	ld	a,l
+	and	0F0h
+	rra
+	rra
+	rra
+	rra
+	ld	(de),a
+	inc	de
+	ld	a,l
+	and	0Fh
+	ld	(de),a
+	inc	de
+
+	ld	a,(score3)	
+	
+	and	0F0h
+	rra
+	rra
+	rra
+	rra
+	ld	(de),a
+	inc	de
+	ld	a,(score3)
+	and	0Fh
+	ld	(de),a
+	inc	de
+
+	ld	hl,clsdat
+	ld	c,9
+	call	ldir80
+
+	ld	hl,cnt
+	ld	(hl),200
+	ld	hl,msglen
+	ld	(hl),50+4+18+6
+
+p8_cont:
+	ld	hl,highbuff
+	ld	de,msglen
+	ld	a,(de)
+	ld	b,a
+	inc	de		; Get the pos into a
+	ld	a,(de)  
+	cp	b
+	jp  	nc,p8_end
+	
+	add	a,l		; Change start of message to current pos
+	ld	l,a
+
+	call	prtstr
+	ld	a,(pos)
+	cp	10
+	jp	z,p8_end
+
+	inc	a
+	ld	(pos),a
+	ret
+
+p8_end:	
+	ex	de,hl 
+	ld	hl,msglen
+ 	ld	b,(hl)
+	ex	de,hl
+	cp	b
+	jp	z,p8_again	
+	inc	a
+	ld	(pos),a
+	ret
+
+p8_again:
+	ld	hl,pos
+	ld	(hl),0
+	ret
+p8_exit:
+	ld	hl,pos
+	ld	(hl),9
+	inc	l
+	inc	(hl)
+	ret
+p10:
+	ld	hl,pos
+	ld	(hl),9
+	ld	a,(phase)
+	sub	3
+	ld	(phase),a
+	ret
+
+;Show the high score table
+ldir80:
+	ld	a,(hl)
+	ld	(de),a
+	inc	hl
+	inc	de
+	dec	c
+	jp	nz,ldir80
+	ret
+	
+; Print string to display buffer
+; Input: HL - address of string to be printed
+prtstr:
+	ld  de,data2+9
+prtstr2:	
+	ld  b,9
+	
+prt_str:	
+	ld	a,(hl)
+	inc	hl
+	cp	255
+	jp	nz,prtznk
+	ld	a,25
+	dec	hl
+prtznk:	push	hl
+
+; Print char to buffer position
+; Input: DE - address where to write char, A - PMI char code
+
+	ld	hl,01BEh
+	add	a,l
+	ld	l,a
+	jp	nc,hokp6
+	inc	h
+hokp6:	ld	a,(hl)
+	cpl
+	and	127
+	ld	(de),a
+	dec	de
+
+;; Continue of print loop
+
+	pop hl
+	dec b
+	jp  nz,prt_str
+	ret	
+
+clsdat: 
+	db  19h, 19h, 19h, 19h, 19h, 19h, 19h, 19h, 19h ;= mezery 
+pres:
+	db  13h,12h,0Eh,05h,0Eh,1Bh,10h,05h,19h,19h ; PrESEntS in PMI code
+
+demo:	      
+	db  20h,0Ah,16h,0Eh,19h,0Fh,00h,12h,19h
+anidat:
+    db	0,1,33,97,101,109,128,0,2,6,128
+    db	0,16,80,84,128,0,2,6,14,30,94,128
+    db	0,2,6,128,0,32,48,48+64,128,0,32,32+64,36+64,128
+    db	0,16,48,48+1,48+3,48+7,48+64+7,128
+    db	0,32,48,48+8,48+64+8,128
+    db	255,255
+
+anidat2:
+    db  32,48,56,120,128
+    db	0,32,48,49,49+64,57+64,128
+    db  32,48,56,120,128
+    db  0,16,80,128
+    db  0,2,6,128
+    db	0,1,33,97,101,109,128
+    db  0,128
+    db  0,2,6,128
+    db  0,2,6,14,30,94
+    db	255,255
+
+fadeout:
+    db	254,221,191,235,247,255
+
+highsc:
+    db  1Ah,01h,20h,1Ah,19h,05h,0Ch,00h,12h,0Eh,18h,19h
+chuck:
+    db  01h,19h,0Ch,1Ah,15h,0Ch,85h,19h,1Bh,00h,12h,12h,01h,05h,19h,11h,11h,19h,11h,11h,19h
+plr1:
+    db  19h,13h,14h,0Ah,23h,0Eh,12h,01h,19h
+endhs:
+; End of highscore messages
+
+	OUTEND
+        ASSERT $ < #2000 , Depacked code and data in RAM too long !
+
+
+;; Variables, buffers, stack
+
+	org	1C00h
+    
+data2:	; Display buffer data
+    db	0,0,0,0,0,0,0,0,0,0
+buff:	; Buffer used for calculation of vertial scroll
+    db	0,0,0,0,0,0,0,0,0,0,0,0,0
+gap:
+    db	0
+chr:	; Current animated character
+    dw	0
+offs:	; Pattern offset
+    dw	0
+cnt:
+    db	0
+pse:
+    db  0
+;Phase
+rnd equ 0
+	
+ptrnd:
+    db  0
+predict:
+    db  0
+cur:
+    db  0
+blik:
+    db  0
+msglen:
+    db  0
+pos:	; Position in animation
+    db	0
+phase:
+    db	0
+score3:
+    db  0
+score:
+    dw  0
+
+scdly:
+    db  0
+backup:
+    db  0
+endvar:
+
+pts:
+	db	13h,10h,19h
+	db	0,0,0,0,0,0
+highbuff:
+; Highscore message buffer
+	db	0

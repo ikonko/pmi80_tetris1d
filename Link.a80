@@ -1,0 +1,32 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;   Tetris 1D "game" for PMI-80  ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Source 2: Link final code
+
+dstadd	=	#1CA0	;; Address in RAM for depack of part 2 (must be the same as in Main.a80 !)
+
+	OUTPUT	tetris1d.cod
+
+	ORG	#0400
+start	ld	sp,dstadd
+	call	depack
+
+	INCBIN	Main.cod
+
+depack
+lzxspd	=	0
+
+	DEFINE	declzx_user_params
+	DEFINE  declzx_pack_params
+	INCLUDE	Main.inc
+	INCLUDE DecLzx02-8080.asm
+
+srcadd	INCBIN	Main.pck
+
+length	=	$-start
+
+	ASSERT typcom < 5 , Cannot use this compression in ROM !
+	ASSERT length < 1025 , Lenght of final block overflows 1kB !
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

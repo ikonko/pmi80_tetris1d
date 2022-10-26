@@ -1,0 +1,14 @@
+#!/bin/bash
+PATH=$PATH:bin
+
+rm *.cod *.dat *.lst *.inc *.pck
+
+sjasmplus --i8080 --lstlab --lst=Main.lst Main.a80
+
+lzxpack -i -d spd0lens-8080.txt -o Main.pck Main.dat -tn
+
+sjasmplus --i8080 --lstlab --lst=Link.lst Link.a80
+
+sjasmplus Convert.a80
+
+cp tetris1d.cod tetris1d.bin

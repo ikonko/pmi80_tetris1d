@@ -1,0 +1,928 @@
+# file opened: Main.a80
+  1   0000              ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  2   0000              ;; Tetris 1D "game" for pure PMI-80 ;;
+  3   0000              ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  4   0000
+  5   0000
+  6   0000              ;; Source 1: Source code and data
+  7   0000
+  8   0000              dstadd  =       #1CA0   ;; Address in RAM for depack of part 2
+  9   0000
+ 10   0000              ;; Memory use:
+ 11   0000              ;;
+ 12   0000              ;;  #0400-packed ... Code part 1 (not packed)
+ 13   0000              ;;  packed-????? ... LZX decompressor and packed code&data (????? < #0800)
+ 14   0000              ;;
+ 15   0000              ;;  #1C00-dstadd ... variables, buffers, stack
+ 16   0000              ;;  dstadd-#1FFF ... Code part 2 (depacked from packed-?????)
+ 17   0000
+ 18   0000              	DEFINE codefile Main.cod
+ 19   0000              	DEFINE datafile Main.dat
+ 20   0000
+ 21   0000              	OUTPUT Main.cod
+ 22   0000              	org 0400h + 6	 ;; 6 bytes space for "ld sp,dstadd : call depack"
+ 23   0406                 	;org	0400h
+ 24   0406
+ 25   0406              PPA	equ 0F8h    ; Segmenty
+ 26   0406              PPC	equ 0FAh    ; Adresa segmentu
+ 27   0406
+ 28   0406              stdcnt  equ 255
+ 29   0406              shortcnt  equ 90
+ 30   0406              intrdly	equ	80
+ 31   0406
+ 32   0406 21 2A 1C     init:	ld	hl,endvar
+ 33   0409 AF           	xor	a
+ 34   040A              clrvar:
+ 35   040A 77           	ld	(hl),a
+ 36   040B 2D           	dec	l
+ 37   040C C2 0A 04     	jp	nz,clrvar
+ 38   040F
+ 39   040F 21 2A 1C     	ld	hl,pts			; Copy Pts string
+ 40   0412 36 13        	ld	(hl),13h
+ 41   0414 23           	inc	hl
+ 42   0415 36 10        	ld	(hl),10h
+ 43   0417 23           	inc	hl
+ 44   0418 36 19        	ld	(hl),19h
+ 45   041A
+ 46   041A 3E 50        	ld	a,intrdly		;; Intro delay
+ 47   041C 32 1C 1C     	ld	(cnt),a
+ 48   041F 21 09 1C     	ld	hl,data2+9
+ 49   0422 22 18 1C     	ld	(chr),hl
+ 50   0425
+ 51   0425 CD 21 1E         	call    clrscr
+ 52   0428
+ 53   0428              ; Shows the pattern on the screen
+ 54   0428              pat:
+ 55   0428 21 1C 1C     	ld  hl,cnt
+ 56   042B 5E               	ld  e,(hl)
+ 57   042C              start2:
+ 58   042C 21 00 1C     	ld	hl,data2
+ 59   042F 0E 09        	ld	c,9
+ 60   0431              seg1:
+ 61   0431 3E 7F            	ld  a,07Fh
+ 62   0433 D3 F8            	out (PPA),a
+ 63   0435
+ 64   0435 79                   ld      a,c
+ 65   0436 2F                   cpl
+ 66   0437 D3 FA                out     (PPC),a
+ 67   0439
+ 68   0439 7E                   ld      a,(hl)
+ 69   043A 2F                   cpl
+ 70   043B D3 F8                out     (PPA),a
+ 71   043D
+ 72   043D 23           	inc	hl
+ 73   043E
+ 74   043E 0D           	dec	c
+ 75   043F 79           	ld  a,c
+ 76   0440 FE FE        	cp  254
+ 77   0442 C2 31 04     	jp  nz,seg1
+ 78   0445
+ 79   0445 1D           	dec	e
+ 80   0446 C2 2C 04     	jp	nz,start2
+ 81   0449
+ 82   0449 3E 7F        	ld	a,07Fh
+ 83   044B D3 F8        	out	(PPA),a
+ 84   044D
+ 85   044D C5           	push	bc
+ 86   044E D5           	push	de
+ 87   044F E5           	push	hl
+ 88   0450 CD 59 04     	call	exec	    ; Do calculations of what's on the display
+ 89   0453 E1           	pop	hl
+ 90   0454 D1           	pop	de
+ 91   0455 C1           	pop	bc
+ 92   0456
+ 93   0456 C3 28 04     	jp	pat
+ 94   0459
+ 95   0459              ; Main routine preparing data for display
+ 96   0459
+ 97   0459              exec:
+ 98   0459 3A 24 1C     phsel:	ld 	a,(phase)	    ; Phase selection
+ 99   045C 21 6B 04     	ld	hl,tskok1
+100   045F
+101   045F              ;; Universal branch routine
+102   045F              ;; Vstup: A=branch number, HL=table with addresses
+103   045F
+104   045F 87           tabjmp	add	a,a
+105   0460 85           	add	a,l
+106   0461 6F           	ld	l,a
+107   0462 D2 66 04     	jp	nc,tabskp	;<= Ak tabulky cele lezia v ramci 256 bajtov,
+108   0465 24           	inc	h		;<= tieto dve instrukcie tu netreba
+109   0466 7E           tabskp	ld	a,(hl)
+110   0467 23           	inc	hl
+111   0468 66           	ld	h,(hl)
+112   0469 6F           	ld	l,a
+113   046A E9           	jp	(hl)
+114   046B
+115   046B              ;; Value phase:  0  1  2  3  4  5  6  7  8  9   10
+116   046B 85 04 C2 04  tskok1	dw	p0,p1,p2,p1,p3,p1,p4,p1,p5,p6,p7,p9,p10
+116   046F E5 04 C2 04
+116   0473 8B 04 C2 04
+116   0477 A0 1C C2 04
+116   047B B3 1C E8 1C
+116   047F E1 1D 2E 1E
+116   0483 F6 1E
+117   0485
+118   0485 21 4E 1F     p0:	ld  hl,anidat	    ; SinDiKat animation
+119   0488 C3 8E 04     	jp  anim
+120   048B
+121   048B 21 83 1F     p3:	ld  hl,anidat2	    ; Tetris animation
+122   048E
+123   048E 11 23 1C     anim:	ld	de,pos
+124   0491 1A           	ld	a,(de)
+125   0492 3C           	inc	a
+126   0493 12           	ld	(de),a
+127   0494
+128   0494 85           	add a,l
+129   0495 D2 99 04     	jp  nc,hisok
+130   0498 24           	inc h
+131   0499              hisok:
+132   0499 6F           	ld  l,a
+133   049A 7E           	ld  a,(hl)  ; Data in acc
+134   049B
+135   049B FE FF        	cp  255
+136   049D CA B5 04     	jp  z,noupd  ; Don't change anything, phase is over
+137   04A0
+138   04A0 FE 80        	cp  128
+139   04A2 CA AB 04     	jp  z,nchr  ; Next char
+140   04A5
+141   04A5 4F           	ld  c,a	    ; Temporary store in C
+142   04A6
+143   04A6 2A 18 1C     	ld  hl,(chr)
+144   04A9
+145   04A9 71           	ld	(hl),c  ; Data to display position
+146   04AA C9           	ret
+147   04AB
+148   04AB 21 23 1C     nchr:	ld	hl,pos
+149   04AE 34           	inc	(hl)
+150   04AF
+151   04AF 2E 18        	ld	l,low chr
+152   04B1 35           	dec	(hl)
+153   04B2 C0           	ret	nz
+154   04B3 34           	inc	(hl)
+155   04B4
+156   04B4 C9           	ret
+157   04B5              noupd:
+158   04B5 3E 09        common:	ld	a,9	    ; (1C)09 is the new address for animation
+159   04B7 32 18 1C     	ld	(chr),a
+160   04BA
+161   04BA 21 24 1C     incphs:	ld	hl,phase
+162   04BD 34           	inc	(hl)
+163   04BE 2B           	dec	hl
+164   04BF 36 00        	ld	(hl),0	;; pos = 0
+165   04C1
+166   04C1 C9           	ret
+167   04C2
+168   04C2              ; Fadeout animation
+169   04C2
+170   04C2 21 00 1C     p1:	ld  hl,data2
+171   04C5 11 B1 1F     	ld  de,fadeout
+172   04C8
+173   04C8 3A 23 1C     	ld  a,(pos)
+174   04CB 83           	add a,e
+175   04CC D2 D0 04     	jp  nc,disok
+176   04CF 14           	inc d
+177   04D0
+178   04D0 5F           disok:	ld  e,a
+179   04D1 1A           	ld  a,(de)
+180   04D2
+181   04D2 3C           	inc	a
+182   04D3 CA B5 04     	jp	z,common
+183   04D6
+184   04D6 06 0A        	ld  b,10
+185   04D8
+186   04D8 1A           p1_1:	ld  a,(de)
+187   04D9 A6           	and (hl)
+188   04DA 77           	ld  (hl),a
+189   04DB 23           	inc hl
+190   04DC
+191   04DC 05           	dec b
+192   04DD C2 D8 04     	jp  nz,p1_1
+193   04E0
+194   04E0 21 23 1C     	ld	hl,pos
+195   04E3 34           	inc	(hl)
+196   04E4
+197   04E4 C9           	ret
+198   04E5
+199   04E5              p2:			; Presents scroll
+200   04E5 21 32 1F     	ld  hl,clsdat
+201   04E8 3A 23 1C     	ld  a,(pos)
+202   04EB FE 0A        	cp  10
+203   04ED D2 02 05     	jp  nc,p2_end
+204   04F0
+205   04F0 85           	add  a,l
+206   04F1 6F           	ld  l,a
+207   04F2
+208   04F2 CD 0D 1F     	call	prtstr
+209   04F5 3A 23 1C     	ld	a,(pos)
+210   04F8 FE 0A        	cp	10
+211   04FA CA 02 05     	jp	z,p2_end
+212   04FD
+213   04FD 3C           	inc	a
+214   04FE 32 23 1C     	ld	(pos),a
+215   0501 C9           	ret
+216   0502
+217   0502 3C           p2_end: inc	a
+218   0503 32 23 1C     	ld	(pos),a
+219   0506 FE 14        	cp	20
+220   0508 CA B5 04     	jp	z,common	;; Tu bolo jp  z,p2_quit
+221   050B C9           	ret
+222   050C              ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+223   050C
+224   050C              ;; End of unpacked code part
+225   050C
+226   050C                      OUTPUT  Main.dat
+227   050C                      ORG     dstadd
+228   1CA0
+229   1CA0              ;; Begin of code and data
+230   1CA0              ;; what will be packed
+231   1CA0              ;; and after execute,
+232   1CA0              ;; it will be depacked to RAM
+233   1CA0
+234   1CA0              packed  =       $
+235   1CA0
+236   1CA0              ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+237   1CA0
+238   1CA0              p4:			    ; Show `dEMO FOr`
+239   1CA0 3A 23 1C     	ld	a,(pos)
+240   1CA3 FE 0A        	cp	10
+241   1CA5 CA BA 04     	jp	z,incphs	;; Tu bolo	jp  z,p4_end
+242   1CA8
+243   1CA8 21 45 1F     	ld	hl,demo
+244   1CAB CD 0D 1F     	call	prtstr
+245   1CAE
+246   1CAE 21 23 1C     	ld	hl,pos
+247   1CB1 34           	inc	(hl)
+248   1CB2 C9           	ret
+249   1CB3              p5:			    ; Show "PMI-80" & flash
+250   1CB3 3A 23 1C     	ld	a,(pos)
+251   1CB6 1F           	rra
+252   1CB7 1F           	rra
+253   1CB8 1F           	rra
+254   1CB9 1F           	rra
+255   1CBA
+256   1CBA 21 32 1F     	ld	hl,clsdat
+257   1CBD
+258   1CBD DA C3 1C     	jp  	c,p5_prt
+259   1CC0
+260   1CC0 21 E7 01     	ld	hl,01E7h
+261   1CC3
+262   1CC3 CD 0D 1F     p5_prt:	call	prtstr
+263   1CC6
+264   1CC6 21 23 1C     	ld	hl,pos
+265   1CC9 34           	inc	(hl)
+266   1CCA 3E 30        	ld	a,48
+267   1CCC 96           	sub	(hl)
+268   1CCD
+269   1CCD C0           	ret	nz
+270   1CCE 3E 09        	ld	a,9
+271   1CD0 77           	ld	(hl),a	; Load 0 to (pos)
+272   1CD1
+273   1CD1 2C           	inc	l
+274   1CD2 34           	inc	(hl)	; Increase phase
+275   1CD3
+276   1CD3 C9           	ret
+277   1CD4              tstbr:
+278   1CD4 3E 0B        	ld	a,11
+279   1CD6 C3 DB 1C     	jp	tstkey
+280   1CD9              tsteq:
+281   1CD9 3E 07                ld      a,7
+282   1CDB              tstkey:
+283   1CDB D3 FA                out     (PPC),a
+284   1CDD DB FA                in      a,(PPC)
+285   1CDF 5F                   ld      e,a
+286   1CE0 3E 00        	ld	a,0
+287   1CE2 D3 FA        	out	(PPC),a
+288   1CE4 7B           	ld	a,e
+289   1CE5 E6 10                and     16
+290   1CE7 C9           	ret
+291   1CE8
+292   1CE8              p6:	; Tetris 1d itself
+293   1CE8              ; Test kbd
+294   1CE8 21 1C 1C             ld      hl,cnt
+295   1CEB 36 FF        	ld	(hl),stdcnt
+296   1CED CD D4 1C     	call	tstbr
+297   1CF0 CA D7 1D     	jp	z,p6_exit
+298   1CF3 CD D9 1C     	call	tsteq
+299   1CF6 C2 FB 1C             jp     nz,cont
+300   1CF9
+301   1CF9 36 28        	ld     (hl),40
+302   1CFB              cont:
+303   1CFB CD 21 1E         call    clrscr
+304   1CFE 3A 1D 1C         ld	a,(pse)
+305   1D01 FE 01            cp 	1
+306   1D03 C2 7F 1D         jp  nz,animt
+307   1D06
+308   1D06 3E 5A            ld  a,shortcnt
+309   1D08 32 1C 1C         ld  (cnt),a
+310   1D0B              ; Phase of clear screen + new tile
+311   1D0B 21 09 1C         ld  hl,data2+9
+312   1D0E 3A 1F 1C         ld  a,(predict)
+313   1D11 47               ld  b,a
+314   1D12              predx:
+315   1D12 7E               ld a,(hl)
+316   1D13 F6 01            or 1
+317   1D15 77               ld (hl),a
+318   1D16
+319   1D16 2B               dec hl
+320   1D17 05               dec b
+321   1D18 C2 12 1D         jp  nz,predx
+322   1D1B
+323   1D1B 1E 5C            ld  e,92
+324   1D1D 3A 21 1C         ld  a,(blik)
+325   1D20 3C               inc a
+326   1D21 32 21 1C         ld  (blik),a
+327   1D24
+328   1D24 E6 01            and 1
+329   1D26 CA 2B 1D         jp  z,noblnk
+330   1D29 1E 00            ld  e,0
+331   1D2B              noblnk:
+332   1D2B 21 01 1C         ld  hl,data2+1
+333   1D2E 3A 20 1C         ld  a,(cur)
+334   1D31 47               ld  b,a
+335   1D32              flsh:
+336   1D32 73               ld  (hl),e
+337   1D33 23               inc hl
+338   1D34 05               dec b
+339   1D35 C2 32 1D         jp  nz,flsh
+340   1D38 3A 21 1C         ld  a,(blik)
+341   1D3B FE 06            cp 6
+342   1D3D C0               ret nz
+343   1D3E
+344   1D3E AF               xor a
+345   1D3F 32 21 1C         ld (blik),a
+346   1D42 21 1D 1C         ld  hl,pse
+347   1D45 35               dec (hl)
+348   1D46 3E 09            ld	a,9
+349   1D48 32 23 1C         ld  (pos),a
+350   1D4B 21 1E 1C         ld  hl,ptrnd
+351   1D4E 34               inc (hl)
+352   1D4F 3E FF            ld  a,stdcnt
+353   1D51 32 1C 1C         ld  (cnt),a
+354   1D54 3A 25 1C         ld	a,(score3)
+355   1D57 32 29 1C         ld  (backup),a
+356   1D5A 3A 20 1C         ld  a,(cur)
+357   1D5D 21 25 1C         ld  hl,score3
+358   1D60 86               add a,(hl)
+359   1D61 D2 6B 1D         jp  nc,noinch
+360   1D64 2A 26 1C         ld  hl,(score)
+361   1D67 23               inc hl
+362   1D68 22 26 1C         ld  (score),hl
+363   1D6B              noinch:
+364   1D6B 32 25 1C         ld (score3),a
+365   1D6E 47               ld b,a
+366   1D6F 3A 29 1C         ld a,(backup)
+367   1D72 A8               xor b
+368   1D73 E6 F0            and 0F0h
+369   1D75 C8               ret z
+370   1D76 AF               xor	a
+371   1D77 32 28 1C         ld  (scdly),a
+372   1D7A 21 24 1C         ld hl,phase
+373   1D7D 34               inc (hl)
+374   1D7E C9               ret
+375   1D7F
+376   1D7F              animt:
+377   1D7F 21 00 1C         ld  hl,data2
+378   1D82 3A 23 1C         ld  a,(pos)
+379   1D85 06 00            ld  b,0
+380   1D87 4F               ld  c,a
+381   1D88 09               add hl,bc
+382   1D89 E5               push hl
+383   1D8A 21 00 00         ld  hl,rnd
+384   1D8D 3A 1E 1C         ld  a,(ptrnd)
+385   1D90 5F               ld  e,a
+386   1D91 16 00            ld  d,0
+387   1D93 19               add hl,de
+388   1D94 7E               ld  a,(hl)
+389   1D95 E6 03            and 3
+390   1D97 C2 9B 1D         jp  nz,nieco
+391   1D9A 3C               inc a
+392   1D9B              nieco:
+393   1D9B 3C               inc a
+394   1D9C 47               ld b,a
+395   1D9D 32 20 1C         ld (cur),a
+396   1DA0 23               inc hl
+397   1DA1 7E               ld a,(hl)
+398   1DA2 E6 03            and 3
+399   1DA4 C2 A8 1D         jp  nz,nieco2
+400   1DA7 3C               inc a
+401   1DA8              nieco2:
+402   1DA8 3C               inc a
+403   1DA9 32 1F 1C         ld (predict),a
+404   1DAC E1               pop hl
+405   1DAD              cube:
+406   1DAD
+407   1DAD 36 5C            ld  (hl),92
+408   1DAF 23               inc hl
+409   1DB0 05               dec b
+410   1DB1 C2 AD 1D         jp  nz,cube
+411   1DB4
+412   1DB4 21 09 1C         ld  hl,data2+9
+413   1DB7 3A 1F 1C         ld  a,(predict)
+414   1DBA 47               ld  b,a
+415   1DBB              pred:
+416   1DBB 7E               ld a,(hl)
+417   1DBC F6 01            or 1
+418   1DBE 77               ld (hl),a
+419   1DBF
+420   1DBF 2B               dec hl
+421   1DC0 05               dec b
+422   1DC1 C2 BB 1D         jp  nz,pred
+423   1DC4
+424   1DC4 3A 23 1C         ld  a,(pos)
+425   1DC7 3D               dec a
+426   1DC8 CA CF 1D         jp  z,nodec
+427   1DCB 32 23 1C         ld  (pos),a
+428   1DCE C9               ret
+429   1DCF              nodec:
+430   1DCF 3A 1D 1C         ld  a,(pse)
+431   1DD2 3C               inc a
+432   1DD3 32 1D 1C         ld  (pse),a
+433   1DD6 C9               ret
+434   1DD7
+435   1DD7              p6_exit:
+436   1DD7 21 24 1C     	ld	hl,phase
+437   1DDA 34           	inc	(hl)
+438   1DDB 34           	inc	(hl)		; Go directly to high score
+439   1DDC AF           	xor	a
+440   1DDD 32 23 1C     	ld	(pos),a
+441   1DE0 C9           	ret
+442   1DE1
+443   1DE1              p7:
+444   1DE1 3A 28 1C     	ld	a,(scdly)
+445   1DE4 FE 03        	cp	3
+446   1DE6 CA 19 1E     	jp	z,nomore
+447   1DE9
+448   1DE9 2A 26 1C     	ld	hl,(score)
+449   1DEC 54           	ld	d,h
+450   1DED 5D           	ld	e,l
+451   1DEE 21 32 1C     	ld	hl,pts+8
+452   1DF1
+453   1DF1 3A 25 1C     	ld	a,(score3)
+454   1DF4 CD 0A 1E     	call	scrbyte
+455   1DF7
+456   1DF7 7B           	ld	a,e
+457   1DF8 CD 0A 1E     	call	scrbyte
+458   1DFB
+459   1DFB 7A           	ld	a,d
+460   1DFC CD 0A 1E     	call	scrbyte
+461   1DFF
+462   1DFF 21 2A 1C     	ld	hl,pts
+463   1E02 CD 0D 1F     	call	prtstr
+464   1E05 21 28 1C     	ld	hl,scdly
+465   1E08 34           	inc	(hl)
+466   1E09 C9           	ret
+467   1E0A              ;Show score byte in A
+468   1E0A              scrbyte:
+469   1E0A 47           	ld	b,a
+470   1E0B E6 0F        	and     0Fh
+471   1E0D 77                   ld      (hl),a
+472   1E0E 2B                   dec     hl
+473   1E0F 78                   ld      a,b
+474   1E10 1F                   rra
+475   1E11 1F                   rra
+476   1E12 1F                   rra
+477   1E13 1F                   rra
+478   1E14 E6 0F                and     0Fh
+479   1E16 77                   ld      (hl),a
+480   1E17 2B           	dec	hl
+481   1E18 C9           	ret
+482   1E19              nomore:
+483   1E19 21 24 1C     	ld	hl,phase
+484   1E1C 35           	dec	(hl)
+485   1E1D AF           	xor	a
+486   1E1E 32 28 1C     	ld	(scdly),a
+487   1E21              clrscr:
+488   1E21 06 0A        	ld  b,10
+489   1E23 21 00 1C     	ld  hl,data2
+490   1E26 AF           	xor a
+491   1E27              clbuf:
+492   1E27 77           	ld  (hl),a
+493   1E28 23           	inc hl
+494   1E29 05           	dec b
+495   1E2A C2 27 1E     	jp  nz,clbuf
+496   1E2D C9               	ret
+497   1E2E
+498   1E2E              ;Show the high score table
+499   1E2E              p9:
+500   1E2E CD D9 1C     	call	tsteq
+501   1E31 CA EE 1E     	jp	z,p8_exit
+502   1E34 3A 23 1C     	ld	a,(pos)
+503   1E37 B7           	or	a
+504   1E38 C2 B9 1E     	jp	nz,p8_cont
+505   1E3B
+506   1E3B              p9_init:
+507   1E3B 21 32 1F     	ld	hl,clsdat
+508   1E3E 11 33 1C     	ld	de,highbuff
+509   1E41 0E 09        	ld	c,9
+510   1E43 CD 04 1F     	call	ldir80
+511   1E46
+512   1E46 21 B7 1F     	ld	hl,highsc
+513   1E49 0E 0C        	ld	c,12		; High score lenght
+514   1E4B CD 04 1F     	call	ldir80
+515   1E4E
+516   1E4E 21 C3 1F     	ld	hl,chuck
+517   1E51 0E 15        	ld	c,21		; Chuck lenght
+518   1E53 CD 04 1F     	call	ldir80
+519   1E56 3E 19        	ld	a,19h
+520   1E58 12           	ld	(de),a
+521   1E59 13           	inc	de
+522   1E5A 3E 02        	ld	a,2
+523   1E5C 12           	ld	(de),a
+524   1E5D 13           	inc	de
+525   1E5E 21 C4 1F     	ld	hl,chuck+1
+526   1E61 0E 11        	ld	c,17
+527   1E63 CD 04 1F     	call	ldir80
+528   1E66
+529   1E66 3E 19        	ld	a,19h
+530   1E68 12           	ld	(de),a
+531   1E69 13           	inc	de
+532   1E6A 3E 03        	ld	a,3
+533   1E6C 12           	ld	(de),a
+534   1E6D 13           	inc	de
+535   1E6E
+536   1E6E 21 D8 1F     	ld	hl,plr1
+537   1E71 0E 09        	ld	c,9		; Player 1 lenght
+538   1E73 CD 04 1F     	call	ldir80
+539   1E76
+540   1E76 2A 26 1C     	ld	hl,(score)
+541   1E79 7C           	ld	a,h
+542   1E7A E6 F0        	and	0F0h
+543   1E7C 1F           	rra
+544   1E7D 1F           	rra
+545   1E7E 1F           	rra
+546   1E7F 1F           	rra
+547   1E80 12           	ld	(de),a
+548   1E81 13           	inc	de
+549   1E82 7C           	ld	a,h
+550   1E83 E6 0F        	and	0Fh
+551   1E85 12           	ld	(de),a
+552   1E86 13           	inc	de
+553   1E87 7D           	ld	a,l
+554   1E88 E6 F0        	and	0F0h
+555   1E8A 1F           	rra
+556   1E8B 1F           	rra
+557   1E8C 1F           	rra
+558   1E8D 1F           	rra
+559   1E8E 12           	ld	(de),a
+560   1E8F 13           	inc	de
+561   1E90 7D           	ld	a,l
+562   1E91 E6 0F        	and	0Fh
+563   1E93 12           	ld	(de),a
+564   1E94 13           	inc	de
+565   1E95
+566   1E95 3A 25 1C     	ld	a,(score3)
+567   1E98
+568   1E98 E6 F0        	and	0F0h
+569   1E9A 1F           	rra
+570   1E9B 1F           	rra
+571   1E9C 1F           	rra
+572   1E9D 1F           	rra
+573   1E9E 12           	ld	(de),a
+574   1E9F 13           	inc	de
+575   1EA0 3A 25 1C     	ld	a,(score3)
+576   1EA3 E6 0F        	and	0Fh
+577   1EA5 12           	ld	(de),a
+578   1EA6 13           	inc	de
+579   1EA7
+580   1EA7 21 32 1F     	ld	hl,clsdat
+581   1EAA 0E 09        	ld	c,9
+582   1EAC CD 04 1F     	call	ldir80
+583   1EAF
+584   1EAF 21 1C 1C     	ld	hl,cnt
+585   1EB2 36 C8        	ld	(hl),200
+586   1EB4 21 22 1C     	ld	hl,msglen
+587   1EB7 36 4E        	ld	(hl),50+4+18+6
+588   1EB9
+589   1EB9              p8_cont:
+590   1EB9 21 33 1C     	ld	hl,highbuff
+591   1EBC 11 22 1C     	ld	de,msglen
+592   1EBF 1A           	ld	a,(de)
+593   1EC0 47           	ld	b,a
+594   1EC1 13           	inc	de		; Get the pos into a
+595   1EC2 1A           	ld	a,(de)
+596   1EC3 B8           	cp	b
+597   1EC4 D2 D9 1E     	jp  	nc,p8_end
+598   1EC7
+599   1EC7 85           	add	a,l		; Change start of message to current pos
+600   1EC8 6F           	ld	l,a
+601   1EC9
+602   1EC9 CD 0D 1F     	call	prtstr
+603   1ECC 3A 23 1C     	ld	a,(pos)
+604   1ECF FE 0A        	cp	10
+605   1ED1 CA D9 1E     	jp	z,p8_end
+606   1ED4
+607   1ED4 3C           	inc	a
+608   1ED5 32 23 1C     	ld	(pos),a
+609   1ED8 C9           	ret
+610   1ED9
+611   1ED9              p8_end:
+612   1ED9 EB           	ex	de,hl
+613   1EDA 21 22 1C     	ld	hl,msglen
+614   1EDD 46            	ld	b,(hl)
+615   1EDE EB           	ex	de,hl
+616   1EDF B8           	cp	b
+617   1EE0 CA E8 1E     	jp	z,p8_again
+618   1EE3 3C           	inc	a
+619   1EE4 32 23 1C     	ld	(pos),a
+620   1EE7 C9           	ret
+621   1EE8
+622   1EE8              p8_again:
+623   1EE8 21 23 1C     	ld	hl,pos
+624   1EEB 36 00        	ld	(hl),0
+625   1EED C9           	ret
+626   1EEE              p8_exit:
+627   1EEE 21 23 1C     	ld	hl,pos
+628   1EF1 36 09        	ld	(hl),9
+629   1EF3 2C           	inc	l
+630   1EF4 34           	inc	(hl)
+631   1EF5 C9           	ret
+632   1EF6              p10:
+633   1EF6 21 23 1C     	ld	hl,pos
+634   1EF9 36 09        	ld	(hl),9
+635   1EFB 3A 24 1C     	ld	a,(phase)
+636   1EFE D6 03        	sub	3
+637   1F00 32 24 1C     	ld	(phase),a
+638   1F03 C9           	ret
+639   1F04
+640   1F04              ;Show the high score table
+641   1F04              ldir80:
+642   1F04 7E           	ld	a,(hl)
+643   1F05 12           	ld	(de),a
+644   1F06 23           	inc	hl
+645   1F07 13           	inc	de
+646   1F08 0D           	dec	c
+647   1F09 C2 04 1F     	jp	nz,ldir80
+648   1F0C C9           	ret
+649   1F0D
+650   1F0D              ; Print string to display buffer
+651   1F0D              ; Input: HL - address of string to be printed
+652   1F0D              prtstr:
+653   1F0D 11 09 1C     	ld  de,data2+9
+654   1F10              prtstr2:
+655   1F10 06 09        	ld  b,9
+656   1F12
+657   1F12              prt_str:
+658   1F12 7E           	ld	a,(hl)
+659   1F13 23           	inc	hl
+660   1F14 FE FF        	cp	255
+661   1F16 C2 1C 1F     	jp	nz,prtznk
+662   1F19 3E 19        	ld	a,25
+663   1F1B 2B           	dec	hl
+664   1F1C E5           prtznk:	push	hl
+665   1F1D
+666   1F1D              ; Print char to buffer position
+667   1F1D              ; Input: DE - address where to write char, A - PMI char code
+668   1F1D
+669   1F1D 21 BE 01     	ld	hl,01BEh
+670   1F20 85           	add	a,l
+671   1F21 6F           	ld	l,a
+672   1F22 D2 26 1F     	jp	nc,hokp6
+673   1F25 24           	inc	h
+674   1F26 7E           hokp6:	ld	a,(hl)
+675   1F27 2F           	cpl
+676   1F28 E6 7F        	and	127
+677   1F2A 12           	ld	(de),a
+678   1F2B 1B           	dec	de
+679   1F2C
+680   1F2C              ;; Continue of print loop
+681   1F2C
+682   1F2C E1           	pop hl
+683   1F2D 05           	dec b
+684   1F2E C2 12 1F     	jp  nz,prt_str
+685   1F31 C9           	ret
+686   1F32
+687   1F32              clsdat:
+688   1F32 19 19 19 19  	db  19h, 19h, 19h, 19h, 19h, 19h, 19h, 19h, 19h ;= mezery
+688   1F36 19 19 19 19
+688   1F3A 19
+689   1F3B              pres:
+690   1F3B 13 12 0E 05  	db  13h,12h,0Eh,05h,0Eh,1Bh,10h,05h,19h,19h ; PrESEntS in PMI code
+690   1F3F 0E 1B 10 05
+690   1F43 19 19
+691   1F45
+692   1F45              demo:
+693   1F45 20 0A 16 0E  	db  20h,0Ah,16h,0Eh,19h,0Fh,00h,12h,19h
+693   1F49 19 0F 00 12
+693   1F4D 19
+694   1F4E              anidat:
+695   1F4E 00 01 21 61      db	0,1,33,97,101,109,128,0,2,6,128
+695   1F52 65 6D 80 00
+695   1F56 02 06 80
+696   1F59 00 10 50 54      db	0,16,80,84,128,0,2,6,14,30,94,128
+696   1F5D 80 00 02 06
+696   1F61 0E 1E 5E 80
+697   1F65 00 02 06 80      db	0,2,6,128,0,32,48,48+64,128,0,32,32+64,36+64,128
+697   1F69 00 20 30 70
+697   1F6D 80 00 20 60
+697   1F71 64 80
+698   1F73 00 10 30 31      db	0,16,48,48+1,48+3,48+7,48+64+7,128
+698   1F77 33 37 77 80
+699   1F7B 00 20 30 38      db	0,32,48,48+8,48+64+8,128
+699   1F7F 78 80
+700   1F81 FF FF            db	255,255
+701   1F83
+702   1F83              anidat2:
+703   1F83 20 30 38 78      db  32,48,56,120,128
+703   1F87 80
+704   1F88 00 20 30 31      db	0,32,48,49,49+64,57+64,128
+704   1F8C 71 79 80
+705   1F8F 20 30 38 78      db  32,48,56,120,128
+705   1F93 80
+706   1F94 00 10 50 80      db  0,16,80,128
+707   1F98 00 02 06 80      db  0,2,6,128
+708   1F9C 00 01 21 61      db	0,1,33,97,101,109,128
+708   1FA0 65 6D 80
+709   1FA3 00 80            db  0,128
+710   1FA5 00 02 06 80      db  0,2,6,128
+711   1FA9 00 02 06 0E      db  0,2,6,14,30,94
+711   1FAD 1E 5E
+712   1FAF FF FF            db	255,255
+713   1FB1
+714   1FB1              fadeout:
+715   1FB1 FE DD BF EB      db	254,221,191,235,247,255
+715   1FB5 F7 FF
+716   1FB7
+717   1FB7              highsc:
+718   1FB7 1A 01 20 1A      db  1Ah,01h,20h,1Ah,19h,05h,0Ch,00h,12h,0Eh,18h,19h
+718   1FBB 19 05 0C 00
+718   1FBF 12 0E 18 19
+719   1FC3              chuck:
+720   1FC3 01 19 0C 1A      db  01h,19h,0Ch,1Ah,15h,0Ch,85h,19h,1Bh,00h,12h,12h,01h,05h,19h,11h,11h,19h,11h,11h,19h
+720   1FC7 15 0C 85 19
+720   1FCB 1B 00 12 12
+720   1FCF 01 05 19 11
+720   1FD3 11 19 11 11
+720   1FD7 19
+721   1FD8              plr1:
+722   1FD8 19 13 14 0A      db  19h,13h,14h,0Ah,23h,0Eh,12h,01h,19h
+722   1FDC 23 0E 12 01
+722   1FE0 19
+723   1FE1              endhs:
+724   1FE1              ; End of highscore messages
+725   1FE1
+726   1FE1              	OUTEND
+727   1FE1                      ASSERT $ < #2000 , Depacked code and data in RAM too long !
+728   1FE1
+729   1FE1
+730   1FE1              ;; Variables, buffers, stack
+731   1FE1
+732   1FE1              	org	1C00h
+733   1C00
+734   1C00              data2:	; Display buffer data
+735   1C00 00 00 00 00      db	0,0,0,0,0,0,0,0,0,0
+735   1C04 00 00 00 00
+735   1C08 00 00
+736   1C0A              buff:	; Buffer used for calculation of vertial scroll
+737   1C0A 00 00 00 00      db	0,0,0,0,0,0,0,0,0,0,0,0,0
+737   1C0E 00 00 00 00
+737   1C12 00 00 00 00
+737   1C16 00
+738   1C17              gap:
+739   1C17 00               db	0
+740   1C18              chr:	; Current animated character
+741   1C18 00 00            dw	0
+742   1C1A              offs:	; Pattern offset
+743   1C1A 00 00            dw	0
+744   1C1C              cnt:
+745   1C1C 00               db	0
+746   1C1D              pse:
+747   1C1D 00               db  0
+748   1C1E              ;Phase
+749   1C1E              rnd equ 0
+750   1C1E
+751   1C1E              ptrnd:
+752   1C1E 00               db  0
+753   1C1F              predict:
+754   1C1F 00               db  0
+755   1C20              cur:
+756   1C20 00               db  0
+757   1C21              blik:
+758   1C21 00               db  0
+759   1C22              msglen:
+760   1C22 00               db  0
+761   1C23              pos:	; Position in animation
+762   1C23 00               db	0
+763   1C24              phase:
+764   1C24 00               db	0
+765   1C25              score3:
+766   1C25 00               db  0
+767   1C26              score:
+768   1C26 00 00            dw  0
+769   1C28
+770   1C28              scdly:
+771   1C28 00               db  0
+772   1C29              backup:
+773   1C29 00               db  0
+774   1C2A              endvar:
+775   1C2A
+776   1C2A              pts:
+777   1C2A 13 10 19     	db	13h,10h,19h
+778   1C2D 00 00 00 00  	db	0,0,0,0,0,0
+778   1C31 00 00
+779   1C33              highbuff:
+780   1C33              ; Highscore message buffer
+781   1C33 00           	db	0
+782   1C34
+# file closed: Main.a80
+
+Value    Label
+------ - -----------------------------------------------------------
+0x1C1A X offs
+0x1C17 X gap
+0x1C0A X buff
+0x1FE1 X endhs
+0x1F3B X pres
+0x1F26   hokp6
+0x1F1C   prtznk
+0x1F12   prt_str
+0x1F10 X prtstr2
+0x1EE8   p8_again
+0x1ED9   p8_end
+0x1C22   msglen
+0x1FD8   plr1
+0x1FC3   chuck
+0x1FB7   highsc
+0x1F04   ldir80
+0x1C33   highbuff
+0x1E3B X p9_init
+0x1EB9   p8_cont
+0x1EEE   p8_exit
+0x1E27   clbuf
+0x1E0A   scrbyte
+0x1E19   nomore
+0x1DCF   nodec
+0x1DBB   pred
+0x1DAD   cube
+0x1DA8   nieco2
+0x1D9B   nieco
+0x0000   rnd
+0x1C28   scdly
+0x1C26   score
+0x1D6B   noinch
+0x1C29   backup
+0x1C25   score3
+0x1C1E   ptrnd
+0x1D32   flsh
+0x1C20   cur
+0x1D2B   noblnk
+0x1C21   blik
+0x1D12   predx
+0x1C1F   predict
+0x1D7F   animt
+0x1C1D   pse
+0x1CFB   cont
+0x1DD7   p6_exit
+0x1CD9   tsteq
+0x1CDB   tstkey
+0x1CD4   tstbr
+0x1CC3   p5_prt
+0x1F45   demo
+0x1CA0 X packed
+0x1F0D   prtstr
+0x0502   p2_end
+0x1F32   clsdat
+0x04D8   p1_1
+0x04D0   disok
+0x1FB1   fadeout
+0x04BA   incphs
+0x04B5   common
+0x04AB   nchr
+0x04B5   noupd
+0x0499   hisok
+0x1C23   pos
+0x1F83   anidat2
+0x048E   anim
+0x1F4E   anidat
+0x1EF6   p10
+0x1E2E   p9
+0x1DE1   p7
+0x1CE8   p6
+0x1CB3   p5
+0x1CA0   p4
+0x048B   p3
+0x04E5   p2
+0x04C2   p1
+0x0485   p0
+0x0466   tabskp
+0x045F X tabjmp
+0x046B   tskok1
+0x1C24   phase
+0x0459 X phsel
+0x0459   exec
+0x0431   seg1
+0x042C   start2
+0x0428   pat
+0x1E21   clrscr
+0x1C18   chr
+0x1C00   data2
+0x1C1C   cnt
+0x1C2A   pts
+0x040A   clrvar
+0x1C2A   endvar
+0x0406 X init
+0x0050   intrdly
+0x005A   shortcnt
+0x00FF   stdcnt
+0x00FA   PPC
+0x00F8   PPA
+0x1CA0   dstadd

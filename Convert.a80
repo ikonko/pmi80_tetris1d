@@ -1,0 +1,76 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Convert binary file into DB's ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+	DEFINE	inpfile  tetris1d.cod
+	DEFINE	outfile  tetris1d.asm
+	DEFINE	number	16
+
+;; number = how many bytes in one 'db'
+
+	DEVICE	ZXSPECTRUM48
+
+	ORG	#4000
+binzac
+	INCBIN	inpfile
+binend
+binlen	=	binend-binzac
+
+asmzac
+read	=	binzac
+
+	IF	__PASS__ == 3
+
+
+
+	db	'.cpu z80',13,10
+	db	'.engine pmi',13,10
+	db	'	ORG	0x400',13,10
+
+
+
+	WHILE	binlen , 65535
+
+	db	'	db	'
+
+numcnt	=	number
+	WHILE	numcnt && binlen
+
+	IF	numcnt < number
+	db	','
+	ENDIF
+
+numcnt	=	numcnt - 1
+binlen	=	binlen - 1
+
+bajt	=	{b read}
+read	=	read + 1
+
+digit1	=	bajt >> 4
+digit2	=	bajt & 0x0F
+
+	db	'0x'
+
+	IF	digit1 < 10
+	db	'0'+digit1
+	ELSE
+	db	'A'-10+digit1
+	ENDIF
+
+	IF	digit2 < 10
+	db	'0'+digit2
+	ELSE
+	db	'A'-10+digit2
+	ENDIF
+
+	ENDW
+
+	db	13,10
+
+	ENDW
+
+	ENDIF	;; End of __PASS__ == 3
+
+	SAVEBIN	 outfile , asmzac , $-asmzac
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
